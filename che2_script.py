@@ -103,7 +103,7 @@ if "services_selected" not in st.session_state:
 # ---------------------------
 # ✅ 너가 사용하는 성경 폴더명(레포 내 경로)
 # 예: repo_root/bible_books.json/창세기.json
-BIBLE_BOOKS_DIR = st.secrets.get("BIBLE_BOOKS_DIR", "bible_books.json")
+BIBLE_BOOKS_DIR = st.secrets.get("BIBLE_BOOKS_DIR", "bible_books_json")
 
 CHAPTER_COUNT = {
     "창세기":50,"출애굽기":40,"레위기":27,"민수기":36,"신명기":34,"여호수아":24,"사사기":21,"룻기":4,"사무엘상":31,"사무엘하":24,
