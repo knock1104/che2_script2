@@ -101,8 +101,6 @@ if "services_selected" not in st.session_state:
 # ---------------------------
 # 성경 JSON 설정
 # ---------------------------
-# ✅ 너가 사용하는 성경 폴더명(레포 내 경로)
-# 예: repo_root/bible_books.json/창세기.json
 BIBLE_BOOKS_DIR = st.secrets.get("BIBLE_BOOKS_DIR", "bible_books.json")
 
 CHAPTER_COUNT = {
@@ -129,6 +127,7 @@ def render_landing():
         "</div>",
         unsafe_allow_html=True
     )
+
     st.write("")
     with st.form("landing_form"):
         role = st.radio("역할 선택", ["교역자", "미디어부"], horizontal=True)
@@ -143,6 +142,7 @@ def render_landing():
             )
         access_code = st.text_input("개인 액세스 코드", type="password", placeholder="예) 0001")
         submitted = st.form_submit_button("입장")
+
     if submitted:
         if access_code == "0001":
             st.session_state.authenticated = True
@@ -237,7 +237,6 @@ def add_material_card(kind: str):
     st.session_state.materials.append(base)
 
 def add_builder_card():
-    # 기본 카드(자료 만들기) - 기본은 성경 구절로
     add_material_card("성경 구절")
 
 def add_sermon_sections_card():
@@ -288,14 +287,9 @@ def add_rich_text(paragraph, text: str):
 # ---------------------------
 @st.cache_data(show_spinner=False, ttl=60*30)
 def load_book_json_from_github(book_name: str) -> Dict[str, Any]:
-    """
-    GitHub에서 권별 JSON 로드:
-    - bible_books.json/{book_name}.json
-    (혹시 과거 구조가 있으면 books 서브폴더도 폴백)
-    """
     candidates = [
         f"{BIBLE_BOOKS_DIR}/{book_name}.json",
-        f"{BIBLE_BOOKS_DIR}/books/{book_name}.json",  # 폴백(혹시 남아있으면)
+        f"{BIBLE_BOOKS_DIR}/books/{book_name}.json",  # 폴백
     ]
     last_err: Optional[Exception] = None
     for path in candidates:
@@ -309,10 +303,6 @@ def load_book_json_from_github(book_name: str) -> Dict[str, Any]:
 
 @st.cache_data(show_spinner=False, ttl=60*30)
 def load_chapter_verses_from_github(book_name: str, chap: int) -> List[Dict[str, Any]]:
-    """
-    권별 JSON에서 장을 꺼내 verses 리스트로 변환
-    반환: [{"verse": 1, "text": "..."}, ...]
-    """
     book_data = load_book_json_from_github(book_name)
     chapter_dict = book_data.get(str(chap), {}) or {}
     out = []
@@ -386,7 +376,14 @@ def render_bible_picker(item: Dict[str, Any], disabled: bool):
                 lines.append(f"{book_name} {int(chap)}:{v['verse']} {v['text']}")
         preview = "\n".join(lines)
 
-    st.text_area("미리보기", value=preview, height=140, disabled=True)
+    # ✅ FIX: 미리보기 위젯에 고유 key 부여 (DuplicateElementId 해결)
+    st.text_area(
+        "미리보기",
+        value=preview,
+        height=140,
+        disabled=True,
+        key=f"bible_preview_{item['id']}"
+    )
 
     if st.button("📥 말씀 추가", key=f"bible_insert_{item['id']}", disabled=disabled):
         prev = item.get("verse_text", "") or ""
@@ -427,9 +424,6 @@ def upload_streamlit_file_to_github(uploaded_file, dest_dir: str, msg_prefix: st
     }
 
 def materials_upload_and_detach_files(materials: List[Dict[str, Any]], files_dir: str, msg_prefix: str) -> List[Dict[str, Any]]:
-    """
-    Streamlit UploadedFile -> GitHub 저장 후 dict 메타로 변환(제출/저장 JSON에 넣기)
-    """
     out = []
     for m in materials:
         m2 = deepcopy(m)
@@ -457,7 +451,6 @@ def materials_upload_and_detach_files(materials: List[Dict[str, Any]], files_dir
             m2["files"] = []
 
         else:
-            # 성경/설교전문
             if "files" in m2:
                 m2["files"] = []
             if "file" in m2:
@@ -518,7 +511,6 @@ def build_docx(worship_date: date, services: List[str], materials: List[Dict[str
                     doc.add_paragraph("(성경 구절 미입력)")
 
             elif kind == "설교 전문":
-                # sections가 있으면 sections 우선
                 if isinstance(sections, list) and len(sections) > 0:
                     for s in sections:
                         t = (s.get("title") or "").strip()
@@ -674,7 +666,6 @@ for i, item in enumerate(st.session_state.materials):
     with st.container(border=True):
         top_cols = st.columns([1.2, 0.2, 0.2, 0.2])
         with top_cols[0]:
-            # 종류별로 선택 옵션 제한
             if item.get("kind") in ("성경 구절", "이미지", "기타 파일"):
                 item["kind"] = st.selectbox(
                     "자료 유형",
@@ -699,7 +690,6 @@ for i, item in enumerate(st.session_state.materials):
             if st.button("삭제", key=f"del_{item['id']}", disabled=not can_edit):
                 to_remove.append(item["id"])
 
-        # --- 본문 영역 ---
         if item["kind"] == "성경 구절":
             render_bible_picker(item, disabled=not can_edit)
 
@@ -800,7 +790,6 @@ for i, item in enumerate(st.session_state.materials):
                         disabled=not can_edit
                     )
 
-            # Word 출력 호환 위해 full_text도 합쳐 저장
             item["full_text"] = "\n\n".join(
                 [f"【{(s.get('title') or '구역').strip()}】\n{(s.get('content') or '').strip()}".strip()
                  for s in item["sections"]]
@@ -836,7 +825,6 @@ for i, item in enumerate(st.session_state.materials):
             item["full_text"] = ""
             item.pop("sections", None)
 
-        # --- 설명(스토리보드) ---
         item["description"] = st.text_area(
             "설명(스토리보드)",
             value=item.get("description", ""),
